@@ -292,6 +292,42 @@ async function getStockSummary() {
   }));
 }
 
+async function getProductListingData(productName) {
+  const productKey = normalizeProductName(productName);
+
+  const { rows } = await pool.query(
+    `
+    SELECT
+      product_name,
+      COUNT(*) FILTER (WHERE status = 'available') AS available,
+      ARRAY_REMOVE(ARRAY_AGG(DISTINCT price ORDER BY price), NULL) AS prices,
+      ARRAY_REMOVE(ARRAY_AGG(DISTINCT robux_price ORDER BY robux_price), NULL) AS robux_prices,
+      COALESCE(
+        MAX(CASE WHEN image_url IS NOT NULL AND image_url <> '' THEN image_url END),
+        NULL
+      ) AS image_url
+    FROM items
+    WHERE product_key = $1
+    GROUP BY product_name
+    `,
+    [productKey]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const row = rows[0];
+
+  return {
+    productName: row.product_name,
+    available: Number(row.available),
+    prices: (row.prices || []).map((value) => Number(value)),
+    robuxPrices: (row.robux_prices || []).map((value) => Number(value)),
+    imageUrl: row.image_url || null,
+  };
+}
+
 module.exports = {
   addCode,
   addToBasket,
@@ -304,4 +340,5 @@ module.exports = {
   deleteCode,
   getProductSummary,
   getStockSummary,
+  getProductListingData,
 };
