@@ -25,9 +25,15 @@ async function ensureShopSchema() {
     CREATE TABLE IF NOT EXISTS baskets (
       user_id TEXT NOT NULL,
       item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      quantity INTEGER NOT NULL DEFAULT 1,
       added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, item_id)
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE baskets
+    ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1
   `);
 
   await pool.query(`

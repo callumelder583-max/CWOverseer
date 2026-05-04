@@ -66,11 +66,22 @@ async function addToBasket(userId, code) {
   if (item.one_time && item.status !== 'available') return false;
 
   const existing = await pool.query(
-    `SELECT 1 FROM baskets WHERE user_id=$1 AND item_id=$2`,
+    `SELECT quantity FROM baskets WHERE user_id=$1 AND item_id=$2`,
     [userId, item.id]
   );
 
-  if (existing.rows.length > 0) return 'duplicate';
+  if (existing.rows.length > 0) {
+    if (item.one_time) return 'duplicate';
+
+    await pool.query(
+      `UPDATE baskets
+       SET quantity = quantity + 1, added_at = NOW()
+       WHERE user_id=$1 AND item_id=$2`,
+      [userId, item.id]
+    );
+
+    return item;
+  }
 
   if (item.one_time) {
     await pool.query(
@@ -92,25 +103,48 @@ async function addToBasket(userId, code) {
 async function addProductToBasket(userId, productName) {
   const productKey = normalizeProductName(productName);
 
+  const reusableExisting = await pool.query(
+    `
+    SELECT i.*, b.quantity
+    FROM baskets b
+    JOIN items i ON i.id = b.item_id
+    WHERE b.user_id = $1
+      AND i.product_key = $2
+      AND i.one_time = false
+    ORDER BY b.added_at DESC, i.added_at ASC
+    LIMIT 1
+    `,
+    [userId, productKey]
+  );
+
+  const existingReusableItem = reusableExisting.rows[0];
+
+  if (existingReusableItem) {
+    await pool.query(
+      `UPDATE baskets
+       SET quantity = quantity + 1, added_at = NOW()
+       WHERE user_id=$1 AND item_id=$2`,
+      [userId, existingReusableItem.id]
+    );
+
+    return existingReusableItem;
+  }
+
   const { rows } = await pool.query(
     `
     SELECT i.*
     FROM items i
-    LEFT JOIN baskets b
-      ON b.item_id = i.id
-      AND b.user_id = $2
     WHERE i.product_key = $1
-      AND b.item_id IS NULL
       AND (
         i.one_time = false
         OR (i.one_time = true AND i.status = 'available')
       )
     ORDER BY
-      CASE WHEN i.one_time THEN 0 ELSE 1 END,
+      CASE WHEN i.one_time THEN 1 ELSE 0 END,
       i.added_at ASC
     LIMIT 1
     `,
-    [productKey, userId]
+    [productKey]
   );
 
   const item = rows[0];
@@ -129,7 +163,7 @@ async function addProductToBasket(userId, productName) {
   }
 
   await pool.query(
-    `INSERT INTO baskets (user_id, item_id) VALUES ($1,$2)`,
+    `INSERT INTO baskets (user_id, item_id, quantity) VALUES ($1,$2,1)`,
     [userId, item.id]
   );
 
@@ -143,6 +177,7 @@ async function getBasket(userId) {
   const { rows } = await pool.query(
     `SELECT i.* FROM baskets b
      JOIN items i ON b.item_id = i.id
+     CROSS JOIN LATERAL generate_series(1, COALESCE(b.quantity, 1))
      WHERE b.user_id = $1`,
     [userId]
   );
@@ -156,8 +191,8 @@ async function getBasket(userId) {
 async function getBasketTotal(userId) {
   const { rows } = await pool.query(
     `SELECT 
-      COALESCE(SUM(price),0) as total_gbp,
-      COALESCE(SUM(robux_price),0) as total_robux
+      COALESCE(SUM(price * b.quantity),0) as total_gbp,
+      COALESCE(SUM(COALESCE(robux_price, 0) * b.quantity),0) as total_robux
      FROM baskets b
      JOIN items i ON b.item_id = i.id
      WHERE b.user_id = $1`,
@@ -184,10 +219,26 @@ async function removeFromBasket(userId, code) {
   const item = rows[0];
   if (!item) return null;
 
-  await pool.query(
-    `DELETE FROM baskets WHERE user_id=$1 AND item_id=$2`,
+  const basketEntry = await pool.query(
+    `SELECT quantity FROM baskets WHERE user_id=$1 AND item_id=$2`,
     [userId, item.id]
   );
+
+  const quantity = Number(basketEntry.rows[0]?.quantity || 0);
+
+  if (quantity > 1 && !item.one_time) {
+    await pool.query(
+      `UPDATE baskets
+       SET quantity = quantity - 1, added_at = NOW()
+       WHERE user_id=$1 AND item_id=$2`,
+      [userId, item.id]
+    );
+  } else {
+    await pool.query(
+      `DELETE FROM baskets WHERE user_id=$1 AND item_id=$2`,
+      [userId, item.id]
+    );
+  }
 
   if (item.one_time) {
     await pool.query(
@@ -223,10 +274,26 @@ async function removeProductFromBasket(userId, productName) {
     return null;
   }
 
-  await pool.query(
-    `DELETE FROM baskets WHERE user_id=$1 AND item_id=$2`,
+  const basketEntry = await pool.query(
+    `SELECT quantity FROM baskets WHERE user_id=$1 AND item_id=$2`,
     [userId, item.id]
   );
+
+  const quantity = Number(basketEntry.rows[0]?.quantity || 0);
+
+  if (quantity > 1 && !item.one_time) {
+    await pool.query(
+      `UPDATE baskets
+       SET quantity = quantity - 1, added_at = NOW()
+       WHERE user_id=$1 AND item_id=$2`,
+      [userId, item.id]
+    );
+  } else {
+    await pool.query(
+      `DELETE FROM baskets WHERE user_id=$1 AND item_id=$2`,
+      [userId, item.id]
+    );
+  }
 
   if (item.one_time) {
     await pool.query(
@@ -281,7 +348,7 @@ async function completePurchase(userId) {
 async function getCodes(productName = null) {
   let query = `
     SELECT i.*,
-      COUNT(b.item_id) as basket_reservations
+      COALESCE(SUM(b.quantity), 0) as basket_reservations
     FROM items i
     LEFT JOIN baskets b ON b.item_id = i.id
   `;
