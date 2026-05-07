@@ -1,10 +1,8 @@
 const {
   ActionRowBuilder,
-  ModalBuilder,
   PermissionFlagsBits,
   SlashCommandBuilder,
-  TextInputBuilder,
-  TextInputStyle,
+  StringSelectMenuBuilder,
 } = require('discord.js');
 
 const {
@@ -15,7 +13,7 @@ const {
   createPurchaseTicket,
   extractOrderMetadataFromTopic,
   fetchOrderOpeningMessage,
-  resolveStatusInput,
+  updateOpeningOrderEmbedStatus,
   updateTicketTopicStatus,
 } = require('../../utils/purchaseTicket');
 
@@ -67,20 +65,11 @@ module.exports = {
         });
       }
 
-      const modal = new ModalBuilder()
-        .setCustomId('purchase:statusmodal')
-        .setTitle('Update Order Status');
-
-      const statusInput = new TextInputBuilder()
-        .setCustomId('status')
-        .setLabel('Status')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(40)
-        .setPlaceholder('Finished, Paid, Awaiting Payment, or Awaiting Staff');
-
-      modal.addComponents(new ActionRowBuilder().addComponents(statusInput));
-      await interaction.showModal(modal);
+      await interaction.reply({
+        content: 'Choose the new order status:',
+        components: [buildStatusSelectMenu()],
+        ephemeral: true,
+      });
       return;
     }
 
@@ -122,10 +111,10 @@ module.exports = {
     }
   },
 
-  async handleModalSubmit(interaction) {
+  async handleSelectMenu(interaction) {
     if (!interaction.inGuild()) {
       await interaction.reply({
-        content: 'This modal can only be used inside a server ticket.',
+        content: 'This menu can only be used inside a server ticket.',
         ephemeral: true,
       });
       return;
@@ -139,31 +128,44 @@ module.exports = {
       return;
     }
 
-    const statusKey = resolveStatusInput(interaction.fields.getTextInputValue('status'));
+    const [, action] = interaction.customId.split(':');
 
-    if (!statusKey) {
+    if (action !== 'statusselect') {
+      return;
+    }
+
+    const statusKey = interaction.values[0];
+    const status = ORDER_STATUSES[statusKey];
+
+    if (!status) {
       await interaction.reply({
-        content:
-          'Invalid status. Use one of: `Finished`, `Paid`, `Awaiting Payment`, or `Awaiting Staff`.',
+        content: 'That status option is not valid.',
         ephemeral: true,
       });
       return;
     }
 
-    const status = ORDER_STATUSES[statusKey];
     const channel = interaction.channel;
+    const metadataBefore = extractOrderMetadataFromTopic(channel.topic);
 
     await channel.edit({
       name: applyStatusEmojiToChannelName(channel.name, status.emoji),
       topic: updateTicketTopicStatus(channel.topic, status.label),
     });
 
-    if (statusKey === 'finished') {
-      await sendFinishedOrderLog(interaction);
+    const openingMessage = await fetchOrderOpeningMessage(channel);
+
+    if (openingMessage) {
+      await updateOpeningOrderEmbedStatus(openingMessage, status);
     }
 
-    await interaction.reply({
+    if (statusKey === 'finished' && metadataBefore.status !== ORDER_STATUSES.finished.label) {
+      await sendFinishedOrderLog(interaction, openingMessage);
+    }
+
+    await interaction.update({
       content: `Order status updated to ${status.emoji} ${status.label}.`,
+      components: [],
     });
   },
 };
@@ -175,17 +177,58 @@ function memberCanUseStaffControls(interaction) {
   );
 }
 
-async function sendFinishedOrderLog(interaction) {
-  const logChannel = await interaction.client.channels.fetch(FINISHED_ORDER_LOG_CHANNEL_ID).catch(() => null);
+function buildStatusSelectMenu() {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('purchase:statusselect')
+      .setPlaceholder('Select a new order status')
+      .addOptions(
+        {
+          label: 'Finished',
+          value: 'finished',
+          description: 'Mark the order as complete',
+          emoji: ORDER_STATUSES.finished.emoji,
+        },
+        {
+          label: 'Paid',
+          value: 'paid',
+          description: 'Payment has been received',
+          emoji: ORDER_STATUSES.paid.emoji,
+        },
+        {
+          label: 'Awaiting Payment',
+          value: 'awaiting_payment',
+          description: 'Waiting for the customer to pay',
+          emoji: ORDER_STATUSES.awaiting_payment.emoji,
+        },
+        {
+          label: 'Awaiting Staff',
+          value: 'awaiting_staff',
+          description: 'Waiting for a staff member to continue',
+          emoji: ORDER_STATUSES.awaiting_staff.emoji,
+        }
+      )
+  );
+}
+
+async function sendFinishedOrderLog(interaction, openingMessage) {
+  const logChannel = await interaction.client.channels
+    .fetch(FINISHED_ORDER_LOG_CHANNEL_ID)
+    .catch(() => null);
 
   if (!logChannel || !logChannel.isTextBased()) {
     return;
   }
 
   const metadata = extractOrderMetadataFromTopic(interaction.channel.topic);
-  const openingMessage = await fetchOrderOpeningMessage(interaction.channel);
-  const orderSummaryField = openingMessage?.embeds?.[0]?.fields?.find((field) => field.name === 'Order Summary');
-  const totalsField = openingMessage?.embeds?.[0]?.fields?.find((field) => field.name === 'Totals');
+  const resolvedOpeningMessage =
+    openingMessage || (await fetchOrderOpeningMessage(interaction.channel));
+  const orderSummaryField = resolvedOpeningMessage?.embeds?.[0]?.fields?.find(
+    (field) => field.name === 'Order Summary'
+  );
+  const totalsField = resolvedOpeningMessage?.embeds?.[0]?.fields?.find(
+    (field) => field.name === 'Totals'
+  );
 
   await logChannel.send({
     embeds: [

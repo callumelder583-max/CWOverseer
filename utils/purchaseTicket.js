@@ -297,6 +297,28 @@ async function fetchOrderOpeningMessage(channel) {
   );
 }
 
+async function updateOpeningOrderEmbedStatus(message, status) {
+  if (!message?.embeds?.[0]) {
+    return;
+  }
+
+  const embed = EmbedBuilder.from(message.embeds[0]);
+  const fields = [...embed.data.fields];
+  const statusIndex = fields.findIndex((field) => field.name === 'Status');
+
+  if (statusIndex === -1) {
+    return;
+  }
+
+  fields[statusIndex] = {
+    ...fields[statusIndex],
+    value: `${status.emoji} ${status.label}`,
+  };
+
+  embed.setFields(fields);
+  await message.edit({ embeds: [embed] });
+}
+
 function chunkLines(lines, maxLength) {
   const chunks = [];
   let current = '';
@@ -330,6 +352,6 @@ module.exports = {
   applyStatusEmojiToChannelName,
   extractOrderMetadataFromTopic,
   fetchOrderOpeningMessage,
-  resolveStatusInput,
+  updateOpeningOrderEmbedStatus,
   updateTicketTopicStatus,
 };
