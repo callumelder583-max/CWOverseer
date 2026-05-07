@@ -3,6 +3,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  EmbedBuilder,
   PermissionFlagsBits,
 } = require('discord.js');
 
@@ -13,6 +14,26 @@ const {
 } = require('./shopDatabase');
 
 const DEFAULT_PURCHASE_CATEGORY_ID = '1499542332368879724';
+const DEFAULT_STATUS_KEY = 'awaiting_staff';
+
+const ORDER_STATUSES = {
+  finished: {
+    emoji: '✔',
+    label: 'Finished',
+  },
+  paid: {
+    emoji: '🟢',
+    label: 'Paid',
+  },
+  awaiting_payment: {
+    emoji: '🟡',
+    label: 'Awaiting Payment',
+  },
+  awaiting_staff: {
+    emoji: '🔴',
+    label: 'Awaiting Staff',
+  },
+};
 
 async function createPurchaseTicket(interaction) {
   const basket = await getBasket(interaction.user.id);
@@ -34,6 +55,7 @@ async function createPurchaseTicket(interaction) {
       grouped[name] = {
         quantity: 0,
         price: Number(item.price || 0),
+        robuxPrice: Number(item.robux_price || 0),
       };
     }
 
@@ -42,7 +64,10 @@ async function createPurchaseTicket(interaction) {
 
   const summaryLines = Object.entries(grouped).map(([name, data]) => {
     const itemTotal = data.price * data.quantity;
-    return `**${name}** x${data.quantity} - GBP ${itemTotal.toFixed(2)}`;
+    const robuxTotal = data.robuxPrice * data.quantity;
+    const robuxLine = robuxTotal > 0 ? ` | Robux ${robuxTotal}` : '';
+
+    return `**${name}** x${data.quantity} - GBP ${itemTotal.toFixed(2)}${robuxLine}`;
   });
 
   const guild = interaction.guild;
@@ -52,13 +77,18 @@ async function createPurchaseTicket(interaction) {
       .replace(/[^a-z0-9-]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
-      .slice(0, 70) || 'customer';
+      .slice(0, 60) || 'customer';
+  const orderId = generateOrderId();
+  const status = ORDER_STATUSES[DEFAULT_STATUS_KEY];
 
   const ticketChannel = await guild.channels.create({
-    name: `purchase-${safeName}`,
+    name: buildPurchaseChannelName(safeName, status.emoji),
     type: ChannelType.GuildText,
     parent: process.env.PURCHASE_CATEGORY_ID || DEFAULT_PURCHASE_CATEGORY_ID,
-    topic: `Purchase ticket for ${interaction.user.tag} (${interaction.user.id})`,
+    topic:
+      `Purchase ticket for ${interaction.user.tag} (${interaction.user.id}) | ` +
+      `Order ID: ${orderId} | ` +
+      `Status: ${status.label}`,
     permissionOverwrites: [
       {
         id: guild.roles.everyone.id,
@@ -99,7 +129,52 @@ async function createPurchaseTicket(interaction) {
       .join('\n');
   });
 
-  const controls = new ActionRowBuilder().addComponents(
+  const orderEmbed = new EmbedBuilder()
+    .setColor('#2B8CFF')
+    .setTitle('Purchase Ticket Opened')
+    .setDescription(`Your order has been created and the codes have been delivered in this ticket.`)
+    .addFields(
+      {
+        name: 'Customer',
+        value: `<@${interaction.user.id}>`,
+        inline: true,
+      },
+      {
+        name: 'Order ID',
+        value: orderId,
+        inline: true,
+      },
+      {
+        name: 'Status',
+        value: `${status.emoji} ${status.label}`,
+        inline: true,
+      },
+      {
+        name: 'Order Summary',
+        value: summaryLines.join('\n'),
+      },
+      {
+        name: 'Totals',
+        value:
+          `GBP ${Number(total.gbp || 0).toFixed(2)}\n` +
+          `Robux ${Number(total.robux || 0)}`,
+      }
+    )
+    .setFooter({ text: 'Use the buttons below to cancel or update this order.' })
+    .setTimestamp();
+
+  const orderControls = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('purchase:cancel')
+      .setLabel('Cancel Order')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('purchase:status')
+      .setLabel('Update Status')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const staffControls = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`purchase:claim:${interaction.user.id}`)
       .setLabel('Claim Ticket')
@@ -111,19 +186,13 @@ async function createPurchaseTicket(interaction) {
   );
 
   await ticketChannel.send({
-    content:
-      `Purchase Ticket\n\n` +
-      `Customer: <@${interaction.user.id}>\n\n` +
-      `Order Summary:\n` +
-      `${summaryLines.join('\n')}\n\n` +
-      `Total: GBP ${Number(total.gbp || 0).toFixed(2)}\n` +
-      `Robux Total: ${Number(total.robux || 0)}\n\n` +
-      `---\nDelivered Codes Below:`,
+    embeds: [orderEmbed],
+    components: [orderControls],
   });
 
   await ticketChannel.send({
     content: 'Staff controls for this ticket:',
-    components: [controls],
+    components: [staffControls],
   });
 
   for (const chunk of chunkLines(itemLines, 1800)) {
@@ -134,6 +203,65 @@ async function createPurchaseTicket(interaction) {
     ok: true,
     ticketChannel,
   };
+}
+
+function generateOrderId() {
+  const numericId = Math.floor(10000000 + Math.random() * 90000000);
+  return `CWO-${numericId}`;
+}
+
+function buildPurchaseChannelName(safeName, emoji) {
+  return `${emoji}-purchase-${safeName}`.slice(0, 100);
+}
+
+function updateTicketTopicStatus(topic, nextStatusLabel) {
+  if (!topic) {
+    return `Status: ${nextStatusLabel}`;
+  }
+
+  if (topic.includes('Status: ')) {
+    return topic.replace(/Status: [^|]+/u, `Status: ${nextStatusLabel}`);
+  }
+
+  return `${topic} | Status: ${nextStatusLabel}`;
+}
+
+function applyStatusEmojiToChannelName(channelName, emoji) {
+  let nextName = channelName;
+  let claimedPrefix = '';
+
+  if (nextName.startsWith('claimed-')) {
+    claimedPrefix = 'claimed-';
+    nextName = nextName.slice('claimed-'.length);
+  }
+
+  nextName = nextName.replace(/^(✔|🟢|🟡|🔴)-/u, '');
+  return `${claimedPrefix}${emoji}-${nextName}`.slice(0, 100);
+}
+
+function resolveStatusInput(input) {
+  const normalized = input.trim().toLowerCase();
+
+  const aliases = new Map([
+    ['✔', 'finished'],
+    ['finished', 'finished'],
+    ['done', 'finished'],
+    ['complete', 'finished'],
+    ['completed', 'finished'],
+    ['🟢', 'paid'],
+    ['paid', 'paid'],
+    ['payment received', 'paid'],
+    ['🟡', 'awaiting_payment'],
+    ['awaiting payment', 'awaiting_payment'],
+    ['pending payment', 'awaiting_payment'],
+    ['payment pending', 'awaiting_payment'],
+    ['🔴', 'awaiting_staff'],
+    ['awaiting staff', 'awaiting_staff'],
+    ['waiting staff', 'awaiting_staff'],
+    ['staff', 'awaiting_staff'],
+  ]);
+
+  return aliases.get(normalized) || null;
 }
 
 function chunkLines(lines, maxLength) {
@@ -163,4 +291,8 @@ function chunkLines(lines, maxLength) {
 
 module.exports = {
   createPurchaseTicket,
+  ORDER_STATUSES,
+  applyStatusEmojiToChannelName,
+  resolveStatusInput,
+  updateTicketTopicStatus,
 };
