@@ -9,7 +9,7 @@ function createItemId() {
 }
 
 //
-// ✅ ADD CODE
+// Adds A code to database
 //
 async function addCode(
   productName,
@@ -52,7 +52,7 @@ async function addCode(
 }
 
 //
-// ✅ ADD TO BASKET
+// Adds a code to basket
 //
 async function addToBasket(userId, code) {
   const { rows } = await pool.query(
@@ -171,7 +171,7 @@ async function addProductToBasket(userId, productName) {
 }
 
 //
-// ✅ GET BASKET
+// Views Basket
 //
 async function getBasket(userId) {
   const { rows } = await pool.query(
@@ -186,7 +186,7 @@ async function getBasket(userId) {
 }
 
 //
-// ✅ TOTALS (GBP + ROBUX)
+// Total Amount
 //
 async function getBasketTotal(userId) {
   const { rows } = await pool.query(
@@ -206,7 +206,7 @@ async function getBasketTotal(userId) {
 }
 
 //
-// ✅ REMOVE FROM BASKET
+// Removes a code from basket
 //
 async function removeFromBasket(userId, code) {
   const { rows } = await pool.query(
@@ -308,7 +308,7 @@ async function removeProductFromBasket(userId, productName) {
 }
 
 //
-// ✅ CLEAR BASKET
+// Clears Basket
 //
 async function clearBasket(userId) {
   const items = await getBasket(userId);
@@ -321,7 +321,7 @@ async function clearBasket(userId) {
 }
 
 //
-// ✅ COMPLETE PURCHASE
+// Completes Purchase
 //
 async function completePurchase(userId) {
   const items = await getBasket(userId);
@@ -343,7 +343,7 @@ async function completePurchase(userId) {
 }
 
 //
-// ✅ GET CODES (FIXED FOR /viewcodes)
+// Gets Codes
 //
 async function getCodes(productName = null) {
   let query = `
@@ -374,7 +374,7 @@ async function getCodes(productName = null) {
 }
 
 //
-// ✅ DELETE CODE
+// Deletes Code
 //
 async function deleteCode(itemId) {
   const { rows } = await pool.query(
@@ -390,7 +390,7 @@ async function deleteCode(itemId) {
 }
 
 //
-// ✅ PRODUCT SUMMARY
+// Summary of products
 //
 async function getProductSummary(productName) {
   const productKey = normalizeProductName(productName);
@@ -420,7 +420,7 @@ async function getProductSummary(productName) {
 }
 
 //
-// ✅ STOCK SUMMARY
+// Summary of stocks
 //
 async function getStockSummary() {
   const { rows } = await pool.query(`
