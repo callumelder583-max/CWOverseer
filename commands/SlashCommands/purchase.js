@@ -147,7 +147,10 @@ module.exports = {
 
     const channel = interaction.channel;
     const metadataBefore = extractOrderMetadataFromTopic(channel.topic);
-    await interaction.deferUpdate();
+    await interaction.reply({
+      content: `Updating order status to ${status.emoji} ${status.label}...`,
+      ephemeral: true,
+    });
 
     await channel.edit({
       name: applyStatusEmojiToChannelName(channel.name, status.emoji),
@@ -166,7 +169,6 @@ module.exports = {
 
     await interaction.editReply({
       content: `Order status updated to ${status.emoji} ${status.label}.`,
-      components: [],
     });
   },
 };
