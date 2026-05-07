@@ -389,6 +389,14 @@ async function deleteCode(itemId) {
   return rows[0];
 }
 
+async function deleteAllCodes() {
+  const { rows } = await pool.query(`DELETE FROM items RETURNING id`);
+
+  await pool.query(`DELETE FROM baskets`);
+
+  return rows.length;
+}
+
 //
 // Summary of products
 //
@@ -493,6 +501,7 @@ module.exports = {
   completePurchase,
   getCodes,
   deleteCode,
+  deleteAllCodes,
   getProductSummary,
   getStockSummary,
   getProductListingData,

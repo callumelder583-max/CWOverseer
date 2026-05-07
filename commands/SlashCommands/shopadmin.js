@@ -2,6 +2,7 @@ const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const {
   addCode,
   deleteCode,
+  deleteAllCodes,
   getCodes,
   getProductSummary,
   getStockSummary,
@@ -88,6 +89,11 @@ module.exports = {
             .setDescription('The item id shown in viewcodes')
             .setRequired(true)
         )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('clearallcodes')
+        .setDescription('Delete every stored code from the shop database.')
     ),
 
   async execute(interaction) {
@@ -242,6 +248,19 @@ module.exports = {
         content:
           `Deleted stored code \`${removedItem.id}\` for **${productName}**.` +
           `\nRemoved code: \`${removedItem.code}\``,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (subcommand === 'clearallcodes') {
+      const removedCount = await deleteAllCodes();
+
+      await interaction.reply({
+        content:
+          removedCount > 0
+            ? `Deleted **${removedCount}** stored code(s) from the database.`
+            : 'There were no stored codes to delete.',
         ephemeral: true,
       });
     }
