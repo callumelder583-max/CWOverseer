@@ -48,7 +48,7 @@ module.exports = {
     const userId = interaction.user.id;
     const subcommand = interaction.options.getSubcommand();
 
-    // ✅ ADD
+    // Adds Code to Basket
     if (subcommand === 'add') {
       const code = interaction.options.getString('code');
       const item = await addToBasket(userId, code);
@@ -74,7 +74,7 @@ module.exports = {
       });
     }
 
-    // ✅ VIEW
+    // Views Basket
     if (subcommand === 'view') {
       const basket = await getBasket(userId);
 
@@ -114,7 +114,7 @@ module.exports = {
       });
     }
 
-    // ✅ REMOVE
+    // Removes code from basket
     if (subcommand === 'remove') {
       const code = interaction.options.getString('code');
       const item = await removeFromBasket(userId, code);
@@ -129,7 +129,7 @@ module.exports = {
       });
     }
 
-    // ✅ CLEAR
+    // Clears basket
     if (subcommand === 'clear') {
       const removedCount = await clearBasket(userId);
 
