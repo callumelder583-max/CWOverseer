@@ -116,7 +116,7 @@ module.exports = {
           `Stored a new ${item.oneTime ? 'one-time' : 'reusable'} code for **${item.productName}** ` +
           `with item id \`${item.id}\`.` +
           `\nPrice: ${PAYPAL_EMOJI} ${Number(item.price || 0).toFixed(2)}` +
-          (item.robuxPrice ? `\n${ROBUX_EMOJI}: ${item.robuxPrice}` : '') +
+          (item.robuxPrice ? `\n${ROBUX_EMOJI} ${item.robuxPrice}` : '') +
           `\nItem Image: ${item.imageUrl || 'None'}`,
         ephemeral: true,
       });

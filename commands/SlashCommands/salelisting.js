@@ -225,8 +225,8 @@ module.exports = {
       await interaction.reply({
         content:
           `Added **${item.product_name || item.productName}** to your basket.\n` +
-          `${PAYPAL_EMOJI}: ${Number(item.price || 0).toFixed(2)}\n` +
-          `${ROBUX_EMOJI}: ${Number(item.robux_price || 0)}`,
+          `${PAYPAL_EMOJI} ${Number(item.price || 0).toFixed(2)}\n` +
+          `${ROBUX_EMOJI} ${Number(item.robux_price || 0)}`,
         ephemeral: true,
       });
       return;
@@ -419,14 +419,14 @@ function formatPriceOptions(listingData) {
 
   if (listingData.prices.length > 0) {
     lines.push(
-      `${PAYPAL_EMOJI}: ${listingData.prices
+      `${PAYPAL_EMOJI} ${listingData.prices
         .map((price) => price.toFixed(2))
         .join(', ')}`
     );
   }
 
   if (listingData.robuxPrices.length > 0) {
-    lines.push(`${ROBUX_EMOJI}: ${listingData.robuxPrices.join(', ')}`);
+    lines.push(`${ROBUX_EMOJI} ${listingData.robuxPrices.join(', ')}`);
   }
 
   return lines.join('\n') || 'No prices have been set yet.';
@@ -467,8 +467,8 @@ function formatBasketView(basket, total) {
   return (
     `Your current cart:\n\n` +
     `${lines.join('\n')}\n\n` +
-    `Total ${PAYPAL_EMOJI}: ${Number(total.gbp || 0).toFixed(2)}\n` +
-    `Total ${ROBUX_EMOJI}: ${Number(total.robux || 0)}`
+    `Total ${PAYPAL_EMOJI} ${Number(total.gbp || 0).toFixed(2)}\n` +
+    `Total ${ROBUX_EMOJI} ${Number(total.robux || 0)}`
   );
 }
 
