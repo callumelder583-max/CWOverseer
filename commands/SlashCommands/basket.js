@@ -14,7 +14,7 @@ const {
 const { createPurchaseTicket } = require('../../utils/purchaseTicket');
 
 const PAYPAL_EMOJI = '<:PayPal:1502028520694485074>';
-const ROBUX_EMOJI = '<:Robux:1502028251759902870>';
+const ROBUX_EMOJI = '<:Robux:1502032310969831424>';
 
 module.exports = {
   data: new SlashCommandBuilder()

@@ -23,7 +23,7 @@ const { createPurchaseTicket } = require('../../utils/purchaseTicket');
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
 const PAYPAL_EMOJI = '<:PayPal:1502028520694485074>';
-const ROBUX_EMOJI = '<:Robux:1502028251759902870>';
+const ROBUX_EMOJI = '<:Robux:1502032310969831424>';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -420,7 +420,7 @@ function formatPriceOptions(listingData) {
   if (listingData.prices.length > 0) {
     lines.push(
       `${PAYPAL_EMOJI}: ${listingData.prices
-        .map((price) => `${PAYPAL_EMOJI} ${price.toFixed(2)}`)
+        .map((price) => price.toFixed(2))
         .join(', ')}`
     );
   }
