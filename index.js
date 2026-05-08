@@ -9,6 +9,7 @@ const {
   PermissionFlagsBits,
 } = require('discord.js');
 const { loadCommands } = require('./handlers/loadCommands');
+const { ensureGiveawayState, restoreGiveaways } = require('./utils/giveaways');
 const { ensureShopSchema } = require('./utils/initDatabase');
 const {
   handleGuildMemberAdd,
@@ -33,6 +34,7 @@ const client = new Client({
 
 client.commands = new Collection();
 client.embedBuilderSessions = new Collection();
+client.giveawayTimeouts = new Collection();
 client.ticketPanelSessions = new Collection();
 client.inviteCache = new Collection();
 client.inviteCounts = new Collection();
@@ -160,7 +162,9 @@ async function startBot() {
     );
   }
 
+  ensureGiveawayState(client);
   await client.login(token);
+  await restoreGiveaways(client);
   await initializeInviteTracking(client);
 }
 
