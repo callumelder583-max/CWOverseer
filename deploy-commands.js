@@ -1,11 +1,18 @@
-const fs = require('fs');
-const path = require('path');
 const { REST, Routes } = require('discord.js');
 const { getCommands } = require('./handlers/loadCommands');
+const { getDiscordToken, loadEnv } = require('./utils/env');
 
 loadEnv();
 
-const token = process.env.DISCORD_TOKEN;
+let token;
+
+try {
+  token = getDiscordToken();
+} catch (error) {
+  console.error(`Invalid DISCORD_TOKEN: ${error.message}`);
+  process.exit(1);
+}
+
 const clientId = process.env.CLIENT_ID || process.env.APPLICATION_ID;
 const guildId = process.env.GUILD_ID || process.env.DEV_GUILD_ID;
 
@@ -46,36 +53,4 @@ deployCommands();
 async function getApplicationId() {
   const application = await rest.get(Routes.oauth2CurrentApplication());
   return application.id;
-}
-
-function loadEnv() {
-  const envPath = path.join(__dirname, '.env');
-
-  if (!fs.existsSync(envPath)) {
-    return;
-  }
-
-  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    if (!trimmedLine || trimmedLine.startsWith('#')) {
-      continue;
-    }
-
-    const separatorIndex = trimmedLine.indexOf('=');
-
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = trimmedLine.slice(0, separatorIndex).trim();
-    const rawValue = trimmedLine.slice(separatorIndex + 1).trim();
-    const value = rawValue.replace(/^['"]|['"]$/g, '');
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
 }

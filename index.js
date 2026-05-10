@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const {
   ChannelType,
   Client,
@@ -9,6 +7,7 @@ const {
   PermissionFlagsBits,
 } = require('discord.js');
 const { loadCommands } = require('./handlers/loadCommands');
+const { getDiscordToken, loadEnv } = require('./utils/env');
 const { ensureGiveawayState, restoreGiveaways } = require('./utils/giveaways');
 const { ensureShopSchema } = require('./utils/initDatabase');
 const {
@@ -147,7 +146,14 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-const token = process.env.DISCORD_TOKEN;
+let token;
+
+try {
+  token = getDiscordToken();
+} catch (error) {
+  console.error(`Invalid DISCORD_TOKEN: ${error.message}`);
+  process.exit(1);
+}
 
 if (!token) {
   console.error('Missing DISCORD_TOKEN environment variable.');
@@ -172,39 +178,6 @@ async function startBot() {
   await restoreGiveaways(client);
   await initializeInviteTracking(client);
 }
-
-function loadEnv() {
-  const envPath = path.join(__dirname, '.env');
-
-  if (!fs.existsSync(envPath)) {
-    return;
-  }
-
-  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    if (!trimmedLine || trimmedLine.startsWith('#')) {
-      continue;
-    }
-
-    const separatorIndex = trimmedLine.indexOf('=');
-
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = trimmedLine.slice(0, separatorIndex).trim();
-    const rawValue = trimmedLine.slice(separatorIndex + 1).trim();
-    const value = rawValue.replace(/^['"]|['"]$/g, '');
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-}
-
 async function sendWelcomeMessage(member, inviteData) {
   const welcomeChannel = resolveWelcomeChannel(member.guild);
 
